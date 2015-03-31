@@ -1,6 +1,7 @@
 #include <ruby.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "./giflib-5.1.1/lib/gif_lib.h"
 
 // Create C pallendrome
 char* pallendrome(char* input) {
