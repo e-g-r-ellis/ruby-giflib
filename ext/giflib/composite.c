@@ -17,10 +17,11 @@ void copyGifToWriteHandle(GifFileType* image, GifFileType* output, int frames) {
     output->SColorResolution = image->SColorResolution;
     output->SBackGroundColor = image->SBackGroundColor;
     output->SColorMap = GifMakeMapObject(image->SColorMap->ColorCount, image->SColorMap->Colors);
-    
-    for (int j = 0; j < frames; j++) {
+
+    int i, j; 
+    for (j = 0; j < frames; j++) {
         fprintf(stderr, "Frame %d\n", frames);
-        for (int i = 0; i < image->ImageCount; i++) {
+        for (i = 0; i < image->ImageCount; i++) {
             fprintf(stderr, "Copied %d images.\n", image->ImageCount);
             GifMakeSavedImage(output, &image->SavedImages[i]);
         }
@@ -94,12 +95,12 @@ void composite(GifFileType *image, int x, int y, GifFileType *background) {
     GifByteType *imageByte, *backgroundByte;
     imageByte = image->SavedImages->RasterBits;
     backgroundByte = skipToStart(x, y, background);
-    for (int i = 0; i < image->SHeight; i++) {
+    int i, j;
+    for (i = 0; i < image->SHeight; i++) {
         // Copy row
-        for (int j = 0; j < image->SWidth; j++) {
+        for (j = 0; j < image->SWidth; j++) {
             *(backgroundByte++) = *(imageByte++);
         }
-        
         backgroundByte += background->SWidth - image->SWidth;
     }
 }
@@ -230,7 +231,7 @@ void displayCompositeFiles(struct CompositeFiles *cp) {
     fprintf(stderr, "Composite file (%p)\n", cp);
     fprintf(stderr, "\tbackground: %d days: %d hours: %d minutes: %d seconds: %d\n", cp->background, cp->days, cp->hours, cp->minutes, cp->seconds);
     struct ImageEntry *work = cp->iBack;
-    for (int i = 0; i < cp->background; i++) {
+    for (i = 0; i < cp->background; i++) {
         fprintf(stderr, "\tback[%p] %d\n", i, *work);
         if (work != NULL) {
             displayImageEntry(work);
@@ -238,7 +239,7 @@ void displayCompositeFiles(struct CompositeFiles *cp) {
         work++;
     }
     work = cp->iDays;
-    for (int i = 0; i < cp->days; i++) {
+    for (i = 0; i < cp->days; i++) {
         fprintf(stderr, "\tdays[%p] %d\n", i, *work);
         if (work != NULL) {
             displayImageEntry(work);
@@ -351,9 +352,71 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+/*
+ Ruby binding
+ */
+int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
+    int i;
+    char *text = (char *)fileType->UserData;    // Set by DGifOpen()
+
+    // No data then stop!
+    if (text == NULL) {
+        return 0;
+    }
+    
+    // Read as much as possible (null terminator could be before the count)
+    for (i = 1; i <= count; i++) {
+        *buffer = (GifByteType)*text;
+        if (*text == '\0') {
+            text = NULL;
+            break;
+        }
+        buffer++;
+        text++;
+    }
+    fileType->UserData = text;
+    return i;
+}
+
+struct RubyImage {
+    GifFileType *gifFileType;
+};
+
+static void deallocate(void * rubyImage) {
+    free(rubyImage);
+}
+
+static VALUE allocate(VALUE klass) {
+    struct RubyImage * rubyImage = calloc(1, sizeof(struct RubyImage));
+    return Data_Wrap_Struct(klass, NULL, deallocate, rubyImage);
+}
+
+static VALUE initialize(VALUE self, VALUE rubyGifString) {
+    struct RubyImage * rubyImage;
+    void *data;
+    char *cGifString;
+    int errorCode;
+    
+    Check_Type(rubyGifString, T_STRING);
+    
+    Data_Get_Struct(self, struct RubyImage *, rubyImage);
+    
+    cGifString = RSTRING_PTR(rubyGifString);
+    if ( (rubyImage->gifFileType = DGifOpen(cGifString, readGifFromMemory, &errorCode)) == NULL ) {
+        rb_raise(rb_eException, "Could not read gif.");
+    }
+    if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
+        rb_raise(rb_eException, "Could not decode gif.");
+    }
+    
+    return self;
+}
+
 // Executed by ruby require
 void Init_composite() {
     printf("Initialising composite");
     VALUE mGiflib = rb_define_module("Composite");
     VALUE cGiflibImage = rb_define_class_under(mGiflib, "Image", rb_cObject);
+    rb_define_alloc_func(cGiflibImage, allocate);
+    rb_define_method(cGiflibImage, "initialize", initialize, 1);
 }
