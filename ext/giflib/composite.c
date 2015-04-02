@@ -17,7 +17,6 @@ void copyGifToWriteHandle(GifFileType* image, GifFileType* output, int frames) {
     output->SColorResolution = image->SColorResolution;
     output->SBackGroundColor = image->SBackGroundColor;
     output->SColorMap = GifMakeMapObject(image->SColorMap->ColorCount, image->SColorMap->Colors);
-
     int i, j; 
     for (j = 0; j < frames; j++) {
         fprintf(stderr, "Frame %d\n", frames);
@@ -231,6 +230,7 @@ void displayCompositeFiles(struct CompositeFiles *cp) {
     fprintf(stderr, "Composite file (%p)\n", cp);
     fprintf(stderr, "\tbackground: %d days: %d hours: %d minutes: %d seconds: %d\n", cp->background, cp->days, cp->hours, cp->minutes, cp->seconds);
     struct ImageEntry *work = cp->iBack;
+    int i;
     for (i = 0; i < cp->background; i++) {
         fprintf(stderr, "\tback[%p] %d\n", i, *work);
         if (work != NULL) {
