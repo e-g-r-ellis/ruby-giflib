@@ -18,5 +18,4 @@ File.open("make.log", "w") {
 
 Dir.chdir("..")
 
-create_makefile('pallendrome')
-
+create_makefile('composite')
