@@ -1,3 +1,4 @@
+#include <ruby.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,7 +106,7 @@ void composite(GifFileType *image, int x, int y, GifFileType *background) {
 
 
 char *concatenate(char *a, char *b) {
-    int size = strlen(a) + strlen(b) + 1;
+    unsigned long size = strlen(a) + strlen(b) + 1;
     char *result = calloc(size, sizeof(char));
     memcpy(result, a, strlen(a));
     memcpy(result + strlen(a), b, strlen(b));
@@ -142,7 +143,6 @@ int openReadFileHandle(char* file) {
     fprintf(stderr, "Openning read handle for %s\n", file);
     int result = open(file, O_RDONLY);
     if (result == -1) {
-        int error = errno;
         perror("An error occured");
         exit(-1);
     }
@@ -222,16 +222,16 @@ struct ImageEntry *newImageEntryArray(int size, int exitStatus) {
 }
 
 void displayImageEntry(struct ImageEntry *ie) {
-    fprintf(stderr, "\tie: %x", ie);
+    fprintf(stderr, "\tie: %p", ie);
     fprintf(stderr, "\tfilename: %s handle: %d gif: %p\n", ie->filename, ie->handle, ie->gRead);
 }
 
 void displayCompositeFiles(struct CompositeFiles *cp) {
-    fprintf(stderr, "Composite file (%d)\n", cp);
+    fprintf(stderr, "Composite file (%p)\n", cp);
     fprintf(stderr, "\tbackground: %d days: %d hours: %d minutes: %d seconds: %d\n", cp->background, cp->days, cp->hours, cp->minutes, cp->seconds);
     struct ImageEntry *work = cp->iBack;
     for (int i = 0; i < cp->background; i++) {
-        fprintf(stderr, "\tback[%d] %d\n", i, *work);
+        fprintf(stderr, "\tback[%p] %d\n", i, *work);
         if (work != NULL) {
             displayImageEntry(work);
         }
@@ -239,7 +239,7 @@ void displayCompositeFiles(struct CompositeFiles *cp) {
     }
     work = cp->iDays;
     for (int i = 0; i < cp->days; i++) {
-        fprintf(stderr, "\tdays[%d] %d\n", i, *work);
+        fprintf(stderr, "\tdays[%p] %d\n", i, *work);
         if (work != NULL) {
             displayImageEntry(work);
         }
@@ -292,7 +292,7 @@ struct CompositeFiles *openCompositeFiles(char* root) {
     displayCompositeFiles(cp);
     free(secondPath);
     
-    fprintf(stderr, "Openned composite files %d\n", cp);
+    fprintf(stderr, "Openned composite files %p\n", cp);
     return cp;
 }
 
@@ -349,4 +349,11 @@ int main(int argc, char* argv[]) {
     fprintf(stderr,"EClose complete");
     
     return 0;
+}
+
+// Executed by ruby require
+void Init_composite() {
+    printf("Initialising composite");
+    VALUE mGiflib = rb_define_module("Composite");
+    VALUE cGiflibImage = rb_define_class_under(mGiflib, "Image", rb_cObject);
 }
