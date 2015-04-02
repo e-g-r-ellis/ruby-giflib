@@ -18,9 +18,11 @@ void copyGifToWriteHandle(GifFileType* image, GifFileType* output, int frames) {
     output->SBackGroundColor = image->SBackGroundColor;
     output->SColorMap = GifMakeMapObject(image->SColorMap->ColorCount, image->SColorMap->Colors);
     
-    for (int j = 0; j < frames; j++) {
+    int j;
+    int i;
+    for (j = 0; j < frames; j++) {
         fprintf(stderr, "Frame %d\n", frames);
-        for (int i = 0; i < image->ImageCount; i++) {
+        for (i = 0; i < image->ImageCount; i++) {
             fprintf(stderr, "Copied %d images.\n", image->ImageCount);
             GifMakeSavedImage(output, &image->SavedImages[i]);
         }
@@ -94,9 +96,11 @@ void composite(GifFileType *image, int x, int y, GifFileType *background) {
     GifByteType *imageByte, *backgroundByte;
     imageByte = image->SavedImages->RasterBits;
     backgroundByte = skipToStart(x, y, background);
-    for (int i = 0; i < image->SHeight; i++) {
+    int i;
+    int j;
+    for (i = 0; i < image->SHeight; i++) {
         // Copy row
-        for (int j = 0; j < image->SWidth; j++) {
+        for (j = 0; j < image->SWidth; j++) {
             *(backgroundByte++) = *(imageByte++);
         }
         
@@ -230,7 +234,8 @@ void displayCompositeFiles(struct CompositeFiles *cp) {
     fprintf(stderr, "Composite file (%p)\n", cp);
     fprintf(stderr, "\tbackground: %d days: %d hours: %d minutes: %d seconds: %d\n", cp->background, cp->days, cp->hours, cp->minutes, cp->seconds);
     struct ImageEntry *work = cp->iBack;
-    for (int i = 0; i < cp->background; i++) {
+    int i;
+    for (i = 0; i < cp->background; i++) {
         fprintf(stderr, "\tback[%p] %d\n", i, *work);
         if (work != NULL) {
             displayImageEntry(work);
@@ -238,7 +243,7 @@ void displayCompositeFiles(struct CompositeFiles *cp) {
         work++;
     }
     work = cp->iDays;
-    for (int i = 0; i < cp->days; i++) {
+    for (i = 0; i < cp->days; i++) {
         fprintf(stderr, "\tdays[%p] %d\n", i, *work);
         if (work != NULL) {
             displayImageEntry(work);
