@@ -16,6 +16,11 @@ File.open("make.log", "w") {
 	|file| file.write(`make`)
 }
 
+File.open("make_install.log", "w") {
+	|file| file.write(`sudo make install`)
+}
+
 Dir.chdir("..")
 
-create_makefile('composite')
+FileUtils.touch('./Makefile')
+
