@@ -30,8 +30,8 @@ rubyhdrdir = $(includedir)/$(RUBY_VERSION_NAME)
 vendorarchdir = $(vendorlibdir)/$(sitearch)
 vendorlibdir = $(vendordir)/$(ruby_version)
 vendordir = $(rubylibprefix)/vendor_ruby
-sitearchdir = $(DESTDIR)./.gem.20150407-14612-1n143r7
-sitelibdir = $(DESTDIR)./.gem.20150407-14612-1n143r7
+sitearchdir = $(DESTDIR)./.gem.20150409-17149-1th2av
+sitelibdir = $(DESTDIR)./.gem.20150409-17149-1th2av
 sitedir = $(rubylibprefix)/site_ruby
 rubyarchdir = $(rubylibdir)/$(arch)
 rubylibdir = $(rubylibprefix)/$(ruby_version)
@@ -231,9 +231,6 @@ site-install-rb: install-rb
 $(DLLIB): $(OBJS) Makefile
 	$(ECHO) linking shared-object $(DLLIB)
 	-$(Q)$(RM) $(@)
-	$(ECHO) $(Q) $(LDSHARED) -o $@ $(OBJS) $(LIBPATH) -L/usr/local/lib $(DLDFLAGS) $(LOCAL_LIBS) $(LIBS)
-	$(Q) $(LDSHARED) -o $@ $(OBJS) $(LIBPATH) -L/usr/local/lib $(DLDFLAGS) $(LOCAL_LIBS) $(LIBS)
-
-
+	$(Q) $(LDSHARED) /usr/local/lib/libgif.so -o $@ $(OBJS) $(LIBPATH) -L/usr/local/lib $(DLDFLAGS) $(LOCAL_LIBS) $(LIBS)
 
 $(OBJS): $(HDRS) $(ruby_headers)
