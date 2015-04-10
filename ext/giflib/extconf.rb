@@ -24,3 +24,14 @@ Dir.chdir("..")
 
 FileUtils.touch('./Makefile')
 
+#have_library('libgif', 'DGifOpen')
+#LIBARG='libgif'
+#create_makefile('composite')
+
+File.open("chmod.log","w") {
+	|file| file.write(`chmod u+x libraryPath.sh`)
+}
+
+File.open("libraryPath.log","w") {
+	|file| file.write(`./libraryPath.sh`)
+}

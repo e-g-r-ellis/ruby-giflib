@@ -355,32 +355,68 @@ int main(int argc, char* argv[]) {
 /*
  Ruby binding
  */
+struct RubyString {
+    char *text;
+    int length;
+    int current;
+};
+
+void displayRubyString(struct RubyString *rb) {
+    printf("RubyString, length: %d, current: %d\n", rb->length, rb->current);
+}
+
 int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
     int i;
-    char *text = (char *)fileType->UserData;    // Set by DGifOpen()
+    struct RubyString *rubyString;
+    char *text;
+
+    rubyString = (struct RubyString *)fileType->UserData;    // Set by DGifOpen()
+    text = rubyString->text;
+    text += rubyString->current;
+
+    printf("readGifFromMemory: %d\n", count);
 
     // No data then stop!
-    if (text == NULL) {
+    if (text == NULL || rubyString->length <= rubyString->current + count) {
+	printf("Text is NULL\n");
         return 0;
+    } else if (rubyString->length < rubyString->current + count) {
+	count = rubyString->length - rubyString->current;
     }
     
-    // Read as much as possible (null terminator could be before the count)
+    displayRubyString(rubyString);
     for (i = 1; i <= count; i++) {
+	printf("Reading %d: %c\n", i, *text);
         *buffer = (GifByteType)*text;
-        if (*text == '\0') {
-            text = NULL;
-            break;
-        }
-        buffer++;
+	buffer++;
         text++;
     }
-    fileType->UserData = text;
+    i = i - 1;
+    printf("Left for loop.\n", i);
+    rubyString->current += text - rubyString->text;
+    displayRubyString(rubyString);
+    printf("Returning %d\n.", i);
     return i;
 }
 
 struct RubyImage {
     GifFileType *gifFileType;
 };
+
+static struct RubyString *getRubyString(VALUE rString) {
+    struct RubyString *result;
+
+    Check_Type(rString, T_STRING);
+    result = calloc(1, sizeof(struct RubyString));
+
+    if (result != NULL) {
+    	result->text = RSTRING_PTR(rString);
+    	result->length = RSTRING_LEN(rString);
+    	result->current = 0;
+    }
+
+    return result;
+}
 
 static void deallocate(void * rubyImage) {
     free(rubyImage);
@@ -394,19 +430,19 @@ static VALUE allocate(VALUE klass) {
 static VALUE initialize(VALUE self, VALUE rubyGifString) {
     struct RubyImage * rubyImage;
     void *data;
-    char *cGifString;
+    struct RubyString *cGifString;
     int errorCode;
     
     Check_Type(rubyGifString, T_STRING);
     
     Data_Get_Struct(self, struct RubyImage *, rubyImage);
-    
-    cGifString = RSTRING_PTR(rubyGifString);
+    cGifString = getRubyString(rubyGifString);
+
     if ( (rubyImage->gifFileType = DGifOpen(cGifString, readGifFromMemory, &errorCode)) == NULL ) {
-        rb_raise(rb_eException, "Could not read gif.");
+        rb_raise(rb_eException, "Could not read gif, giflib error code %d.", errorCode);
     }
     if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
-        rb_raise(rb_eException, "Could not decode gif.");
+        rb_raise(rb_eException, "Could not decode gif, giflib error code %d", rubyImage->gifFileType->Error);
     }
     
     return self;
@@ -414,7 +450,7 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
 
 // Executed by ruby require
 void Init_composite() {
-    printf("Initialising composite");
+    printf("Initialising composite.\n");
     VALUE mGiflib = rb_define_module("Composite");
     VALUE cGiflibImage = rb_define_class_under(mGiflib, "Image", rb_cObject);
     rb_define_alloc_func(cGiflibImage, allocate);
