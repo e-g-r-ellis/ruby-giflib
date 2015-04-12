@@ -374,28 +374,27 @@ int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
     text = rubyString->text;
     text += rubyString->current;
 
-    printf("readGifFromMemory: %d\n", count);
+    //printf("readGifFromMemory count: %d current: %d length: %d new count: %d applicable count: %d\n", count, rubyString->current, rubyString->length, rubyString->length - rubyString->current, rubyString->length < rubyString->current + count ? rubyString->length - rubyString->current : count);
 
     // No data then stop!
-    if (text == NULL || rubyString->length <= rubyString->current + count) {
+    if (text == NULL) {
 	printf("Text is NULL\n");
         return 0;
     } else if (rubyString->length < rubyString->current + count) {
 	count = rubyString->length - rubyString->current;
     }
     
-    displayRubyString(rubyString);
+    //displayRubyString(rubyString);
     for (i = 1; i <= count; i++) {
-	printf("Reading %d: %c\n", i, *text);
+	//printf("Reading %d: %c\n", i, *text);
         *buffer = (GifByteType)*text;
 	buffer++;
         text++;
     }
     i = i - 1;
-    printf("Left for loop.\n", i);
-    rubyString->current += text - rubyString->text;
-    displayRubyString(rubyString);
-    printf("Returning %d\n.", i);
+    //printf("Returning %d, text = %d, current = %d, new current = %d\n.", i, text, rubyString->current, text - rubyString->text);
+    rubyString->current = text - rubyString->text;
+    //displayRubyString(rubyString);
     return i;
 }
 
@@ -444,6 +443,7 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
         rb_raise(rb_eException, "Could not decode gif, giflib error code %d", rubyImage->gifFileType->Error);
     }
+    printf("Initialised!!!");
     
     return self;
 }
