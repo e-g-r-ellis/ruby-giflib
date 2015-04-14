@@ -427,9 +427,25 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
         rb_raise(rb_eException, "Could not decode gif, giflib error code %d", rubyImage->gifFileType->Error);
     }
-    printf("Initialised!!!");
-    
     return self;
+}
+
+static VALUE getWidth(VALUE self) {
+	struct RubyImage * rubyImage;
+	Data_Get_Struct(self, struct RubyImage *, rubyImage);
+	return INT2FIX(rubyImage->gifFileType->SWidth);
+}
+
+static VALUE getHeight(VALUE self) {
+	struct RubyImage * rubyImage;
+	Data_Get_Struct(self, struct RubyImage *, rubyImage);
+	return INT2FIX(rubyImage->gifFileType->SHeight);
+}
+
+static VALUE getImageCount(VALUE self) {
+	struct RubyImage * rubyImage;
+	Data_Get_Struct(self, struct RubyImage *, rubyImage);
+	return INT2FIX(rubyImage->gifFileType->ImageCount);
 }
 
 // Executed by ruby require
@@ -439,4 +455,7 @@ void Init_composite() {
     VALUE cGiflibImage = rb_define_class_under(mGiflib, "Image", rb_cObject);
     rb_define_alloc_func(cGiflibImage, allocate);
     rb_define_method(cGiflibImage, "initialize", initialize, 1);
+    rb_define_method(cGiflibImage, "getWidth", getWidth, 0);
+    rb_define_method(cGiflibImage, "getHeight", getHeight, 0);
+    rb_define_method(cGiflibImage, "getImageCount", getImageCount, 0);
 }

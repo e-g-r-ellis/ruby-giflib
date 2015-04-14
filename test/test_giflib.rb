@@ -2,9 +2,27 @@ require 'minitest/autorun'
 require 'giflib/composite'
 
 class GiflibTest < Minitest::Test
-	def test_when_new_image_created_doesNotCrash
+	def loadImage
 		gif = IO.read('./test/pizza/background/background.gif')
-		Composite::Image.new gif
-		assert true
+                Composite::Image.new gif
+	end
+
+	def test_when_new_image_created_doesNotCrash
+		loadImage
+	end
+
+	def test_width
+		image = loadImage
+		assert(image.getWidth == 640, "Width: "+image.getWidth.to_s+" expected 640")
+	end
+
+	def test_height
+		image = loadImage
+		assert(image.getHeight == 398, "Height: "+image.getHeight.to_s+" expected 398")
+	end
+
+	def test_savedImage
+		image = loadImage
+		assert(image.getImageCount == 1, "ImageCount: "+image.getImageCount.to_s+" expected 1")
 	end
 end
