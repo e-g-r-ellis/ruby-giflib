@@ -368,34 +368,18 @@ void displayRubyString(struct RubyString *rb) {
 int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
     int i;
     struct RubyString *rubyString;
-    char *text;
-
     rubyString = (struct RubyString *)fileType->UserData;    // Set by DGifOpen()
-    text = rubyString->text;
-    text += rubyString->current;
-
-    //printf("readGifFromMemory count: %d current: %d length: %d new count: %d applicable count: %d\n", count, rubyString->current, rubyString->length, rubyString->length - rubyString->current, rubyString->length < rubyString->current + count ? rubyString->length - rubyString->current : count);
 
     // No data then stop!
-    if (text == NULL) {
-	printf("Text is NULL\n");
-        return 0;
-    } else if (rubyString->length < rubyString->current + count) {
+    if (rubyString->length < rubyString->current + count) {
 	count = rubyString->length - rubyString->current;
     }
     
-    //displayRubyString(rubyString);
-    for (i = 1; i <= count; i++) {
-	//printf("Reading %d: %c\n", i, *text);
-        *buffer = (GifByteType)*text;
-	buffer++;
-        text++;
+    for (i = 0; i < count; i++) {
+        buffer[i] = rubyString->text[rubyString->current + i];
     }
-    i = i - 1;
-    //printf("Returning %d, text = %d, current = %d, new current = %d\n.", i, text, rubyString->current, text - rubyString->text);
-    rubyString->current = text - rubyString->text;
-    //displayRubyString(rubyString);
-    return i;
+    rubyString->current += count;
+    return count;
 }
 
 struct RubyImage {
