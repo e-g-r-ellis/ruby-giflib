@@ -25,4 +25,9 @@ class GiflibTest < Minitest::Test
 		image = loadImage
 		assert(image.getImageCount == 1, "ImageCount: "+image.getImageCount.to_s+" expected 1")
 	end
+
+	def test_encode
+		image = loadImage
+		encoded = image.encode
+	end
 end
