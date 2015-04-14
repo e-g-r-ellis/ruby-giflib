@@ -19,19 +19,22 @@ struct RubyString {
 };
 
 int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
-    int i;
+    int i, remainingSpace;
     struct RubyString *rubyString;
     rubyString = (struct RubyString *)fileType->UserData;    // Set by DGifOpen()
 
     // No data then stop!
-    if (rubyString->length < rubyString->current + count) {
-	count = rubyString->length - rubyString->current;
+    remainingSpace = rubyString->length - rubyString->current;
+    if (count > remainingSpace) {
+    	count = remainingSpace;
     }
     
     for (i = 0; i < count; i++) {
         buffer[i] = rubyString->text[rubyString->current + i];
     }
+    printf("\tRead in %d, rubyString: %p, current was %d\n", count, rubyString, rubyString->current);
     rubyString->current += count;
+    printf("\tcurrent after increment: %d\n", rubyString->current);
     return count;
 }
 
@@ -46,9 +49,18 @@ static struct RubyString *getRubyString(VALUE rString) {
     result = calloc(1, sizeof(struct RubyString));
 
     if (result != NULL) {
-    	result->text = RSTRING_PTR(rString);
-    	result->length = RSTRING_LEN(rString);
+	result->length = RSTRING_LEN(rString);
+	char *newText = calloc(result->length, sizeof(char));
+	if (newText == NULL) {
+		rb_raise(rb_eException, "Insufficient memory\n");
+	}
+	memcpy(newText, RSTRING_PTR(rString), result->length);
+    	//result->text = RSTRING_PTR(rString);
+	result->text = newText;
+	printf("\tGot string from ruby, length: %d\n", result->length);
     	result->current = 0;
+    } else {
+	rb_raise(rb_eException, "Insufficient memory\n");
     }
 
     return result;
@@ -60,6 +72,7 @@ static void deallocate(void * rubyImage) {
 
 static VALUE allocate(VALUE klass) {
     struct RubyImage * rubyImage = calloc(1, sizeof(struct RubyImage));
+    printf("Allocating...\n");
     return Data_Wrap_Struct(klass, NULL, deallocate, rubyImage);
 }
 
@@ -68,7 +81,8 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     void *data;
     struct RubyString *cGifString;
     int errorCode;
-    
+   
+    printf("Initializing...\n"); 
     Check_Type(rubyGifString, T_STRING);
     
     Data_Get_Struct(self, struct RubyImage *, rubyImage);
@@ -82,7 +96,7 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
         rb_raise(rb_eException, "Could not decode gif, giflib error code %d", rubyImage->gifFileType->Error);
     }
-    printf("SavedImages[0/%d]: %p\n", rubyImage->gifFileType->ImageCount, rubyImage->gifFileType->SavedImages[0]);
+    printf("Post Slurp SavedImages[0/%d]: %p rubyString: %p current: %d\n", rubyImage->gifFileType->ImageCount, rubyImage->gifFileType->SavedImages[0], cGifString, cGifString->current);
     return self;
 }
 

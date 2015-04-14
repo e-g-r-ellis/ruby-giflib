@@ -4,6 +4,7 @@ require 'giflib/composite'
 class GiflibTest < Minitest::Test
 	def loadImage
 		gif = IO.read('./test/pizza/background/background.gif')
+		puts gif.slice(0,10)
                 Composite::Image.new gif
 	end
 
