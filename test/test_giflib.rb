@@ -30,5 +30,9 @@ class GiflibTest < Minitest::Test
 	def test_encode
 		image = loadImage
 		encoded = image.encode
+		puts encoded.class
+		puts encoded.length
+		IO.write('output.gif', encoded)
+		assert(encoded.length == 152951, "Encoded length: "+encoded.length.to_s+" expected 152951")
 	end
 end
