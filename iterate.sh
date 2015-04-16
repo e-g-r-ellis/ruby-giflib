@@ -1,4 +1,6 @@
 #!/bin/bash
+chmod uga+rw *.gif
+rm *.gif
 rm giflib*.gem
 gem uninstall giflib
 gem build ./giflib.gemspec.rb

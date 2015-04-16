@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #include "./giflib-5.1.1/lib/gif_lib.h"
 
@@ -32,9 +34,9 @@ int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
     for (i = 0; i < count; i++) {
         buffer[i] = rubyString->text[rubyString->current + i];
     }
-    printf("\tRead in %d, rubyString: %p, current was %d\n", count, rubyString, rubyString->current);
+    //printf("\tRead in %d, rubyString: %p, current was %d\n", count, rubyString, rubyString->current);
     rubyString->current += count;
-    printf("\tcurrent after increment: %d\n", rubyString->current);
+    //printf("\tcurrent after increment: %d (string: %p)\n", rubyString->current, rubyString);
     return count;
 }
 
@@ -76,11 +78,46 @@ static VALUE allocate(VALUE klass) {
     return Data_Wrap_Struct(klass, NULL, deallocate, rubyImage);
 }
 
+static void writeToFile(GifFileType *gifFileType, char *fname) {
+	GifFileType *out;
+	int fd, i, errorCode, spew;
+	// Open write gif
+	fd = open(fname, O_WRONLY | O_APPEND | O_CREAT);
+	if (fd < 0) {
+		rb_raise(rb_eException, "Could not open '%s' file descriptor.", fname);
+	}
+	printf("Opened 'open.gif' for writing.\n");
+	out = EGifOpenFileHandle(fd, &errorCode);
+	if (out == NULL) {
+		rb_raise(rb_eException, "Could not write header '%s' for writing, error code %d.", fname, errorCode);
+	}
+        printf("Copying image:\n");
+
+        // Copy image
+        out->SWidth = gifFileType->SWidth;
+        out->SHeight = gifFileType->SHeight;
+        out->SColorResolution = gifFileType->SColorResolution;
+        out->SBackGroundColor = gifFileType->SBackGroundColor;
+        out->SColorMap = GifMakeMapObject(gifFileType->SColorMap->ColorCount, gifFileType->SColorMap->Colors);
+        for (i = 0; i < gifFileType->ImageCount; i++) {
+		fprintf(stderr, "Copied %d images.\n", gifFileType->ImageCount);
+                GifMakeSavedImage(out, &(gifFileType)->SavedImages[i]);
+        }
+
+        // Write header
+        printf("Wrote header.\n");
+        spew = EGifSpew(out);
+        if (spew == GIF_ERROR) {
+		rb_raise(rb_eException, "Could not encode body of 'open.gif' for writing, error code %d.", out->Error);
+	}
+}
+
 static VALUE initialize(VALUE self, VALUE rubyGifString) {
     struct RubyImage * rubyImage;
     void *data;
     struct RubyString *cGifString;
-    int errorCode;
+    int errorCode, fd, spew, i;
+    GifFileType *out;
    
     printf("Initializing...\n"); 
     Check_Type(rubyGifString, T_STRING);
@@ -88,15 +125,19 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     Data_Get_Struct(self, struct RubyImage *, rubyImage);
     cGifString = getRubyString(rubyGifString);
 
-    printf("Pre GifOpen current %d\n", cGifString->current);
+    // Read gif from Ruby
+    printf("Pre GifOpen string: %p current: %d\n", cGifString, cGifString->current);
     if ( (rubyImage->gifFileType = DGifOpen(cGifString, readGifFromMemory, &errorCode)) == NULL ) {
         rb_raise(rb_eException, "Could not read gif, giflib error code %d.", errorCode);
     }
-    printf("Pre Slurp current %d\n", cGifString->current);
+    printf("Pre Slurp string: %p current %d\n", cGifString, cGifString->current);
     if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
         rb_raise(rb_eException, "Could not decode gif, giflib error code %d", rubyImage->gifFileType->Error);
     }
-    printf("Post Slurp SavedImages[0/%d]: %p rubyString: %p current: %d\n", rubyImage->gifFileType->ImageCount, rubyImage->gifFileType->SavedImages[0], cGifString, cGifString->current);
+    printf("Post Slurp string: %p current: %d\n", cGifString, cGifString->current);
+
+    writeToFile(rubyImage->gifFileType,"./open.gif");
+
     return self;
 }
 
@@ -120,7 +161,7 @@ char *allocateNewIncrement(int increment) {
 	return result;
 }
 
-int writeToMemory(GifFileType *fileType, const GifByteType *buffer, int count) {
+int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int count) {
 	int i;
 	struct RubyString *string;
 	string = (struct RubyString *)fileType->UserData;
@@ -157,10 +198,12 @@ static VALUE encode(VALUE self) {
 	struct RubyString *rubyString;
 	GifFileType *gifFileType;
         Data_Get_Struct(self, struct RubyImage *, rubyImage);
+
+	writeToFile(rubyImage->gifFileType,"./encode.gif");
 	
 	rubyString = newRubyString();
 	printf("Pre EGifOpen SavedImages[0] %p rubyString %p\n", rubyImage->gifFileType->SavedImages[0], rubyString);
-	gifFileType = EGifOpen(rubyString, writeToMemory, &errorCode);
+	gifFileType = EGifOpen(rubyString, giflibWriteToMemory, &errorCode);
 	if (gifFileType == NULL) {
 		rb_raise(rb_eException, "Could not open gif to encode, giflib error code %d.", errorCode);
 	}
