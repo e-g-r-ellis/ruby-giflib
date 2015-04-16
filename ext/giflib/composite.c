@@ -137,7 +137,7 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     }
     printf("Post Slurp string: %p current: %d\n", cGifString, cGifString->current);
 
-    writeToFile(rubyImage->gifFileType,"./open.gif");
+    //writeToFile(rubyImage->gifFileType,"./open.gif");
 
     return self;
 }
@@ -217,7 +217,7 @@ static VALUE encode(VALUE self) {
 	GifFileType *gifFileType;
         Data_Get_Struct(self, struct RubyImage *, rubyImage);
 
-	writeToFile(rubyImage->gifFileType,"./encode.gif");
+	//writeToFile(rubyImage->gifFileType,"./encode.gif");
 	rubyString = newRubyString();
 	writeToMemory(rubyImage->gifFileType, rubyString);
 	printf("Final current: %d\n", rubyString->current);
@@ -243,6 +243,55 @@ static VALUE getImageCount(VALUE self) {
 	return INT2FIX(rubyImage->gifFileType->ImageCount);
 }
 
+GifByteType *skipToStart(int x, int y, GifFileType *file) {
+	int toSkip = file->SWidth * y + x;
+	return (GifByteType *)file->SavedImages->RasterBits + toSkip;
+}
+
+void giflibCompose(GifFileType *current, GifFileType *compose, int x, int y) {
+	GifByteType *currentByte, *composeByte;
+	composeByte = compose->SavedImages->RasterBits;
+	currentByte = skipToStart(x,y,current);
+	int i, j;
+	for (i = 0; i < compose->SHeight; i++) {
+		for (j = 0; j < compose->SWidth; j++) {
+			*(currentByte++) = *(composeByte++);
+		}
+		currentByte += current->SWidth - compose->SWidth;
+	}
+}
+
+static VALUE compose(VALUE self, VALUE image, VALUE x, VALUE y) {
+	struct RubyImage *current;
+	struct RubyImage *compose;
+	GifFileType *gifCurrent;
+	GifFileType *gifCompose;
+	int gifX;
+	int gifY;
+
+	Check_Type(x, T_FIXNUM);
+	Check_Type(y, T_FIXNUM);
+
+	Data_Get_Struct(self, struct RubyImage *, current);
+	Data_Get_Struct(image, struct RubyImage *, compose);
+	gifCurrent = current->gifFileType;
+	gifCompose = compose->gifFileType;
+	gifX = FIX2INT(x);
+	gifY = FIX2INT(y);
+
+	if (gifX < 0) {
+		rb_raise(rb_eException, "Compose x value must be >= 0 (not %d).", gifX);
+	} else if (gifY < 0) {
+		rb_raise(rb_eException, "Compose y value must be >= 0 (not %d).", gifY);
+	} else if (gifX + gifCompose->SWidth > gifCurrent->SWidth) {
+		rb_raise(rb_eException, "Composite would extend over the end of the current image (current image width: %d, x: %d, composite image width %d)", gifCurrent->SWidth, gifX, gifCompose->SWidth);
+	} else if (gifY + gifCompose->SHeight > gifCurrent->SHeight) {
+		rb_raise(rb_eException, "Composite would extend over the end of the current image (current image height: %d, y: %d, composite image height %d)", gifCurrent->SHeight, gifY, gifCompose->SHeight);
+	}
+	
+	giflibCompose(gifCurrent, gifCompose, gifX, gifY);
+}
+
 // Executed by ruby require
 void Init_composite() {
     printf("Initialising composite.\n");
@@ -254,4 +303,5 @@ void Init_composite() {
     rb_define_method(cGiflibImage, "getHeight", getHeight, 0);
     rb_define_method(cGiflibImage, "getImageCount", getImageCount, 0);
     rb_define_method(cGiflibImage, "encode", encode, 0);
+    rb_define_method(cGiflibImage, "compose", compose, 3);
 }

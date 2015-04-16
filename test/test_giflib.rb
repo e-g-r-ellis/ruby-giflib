@@ -8,31 +8,28 @@ class GiflibTest < Minitest::Test
                 Composite::Image.new gif
 	end
 
-	#def test_when_new_image_created_doesNotCrash
-	#	loadImage
-	#end
+	def test_when_new_image_created_doesNotCrash
+		loadImage
+	end
 
-	#def test_width
-	#	image = loadImage
-	#	assert(image.getWidth == 640, "Width: "+image.getWidth.to_s+" expected 640")
-	#end
+	def test_width
+		image = loadImage
+		assert(image.getWidth == 640, "Width: "+image.getWidth.to_s+" expected 640")
+	end
 
-	#def test_height
-	#	image = loadImage
-	#	assert(image.getHeight == 398, "Height: "+image.getHeight.to_s+" expected 398")
-	#end
+	def test_height
+		image = loadImage
+		assert(image.getHeight == 398, "Height: "+image.getHeight.to_s+" expected 398")
+	end
 
-	#def test_savedImage
-	#	image = loadImage
-	#	assert(image.getImageCount == 1, "ImageCount: "+image.getImageCount.to_s+" expected 1")
-	#end
+	def test_savedImage
+		image = loadImage
+		assert(image.getImageCount == 1, "ImageCount: "+image.getImageCount.to_s+" expected 1")
+	end
 
 	def test_encode
 		image = loadImage
 		encoded = image.encode
-		puts encoded.class
-		puts encoded.length
-		IO.write('output.gif', encoded)
-		assert(encoded.length == 152951, "Encoded length: "+encoded.length.to_s+" expected 152951")
+		assert(encoded.length == 152945, "Encoded length: "+encoded.length.to_s+" expected 152945")
 	end
 end
