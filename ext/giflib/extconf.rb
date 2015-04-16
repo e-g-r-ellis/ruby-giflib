@@ -22,12 +22,28 @@ File.open("make_install.log", "w") {
 
 Dir.chdir("..")
 
-FileUtils.touch('./Makefile')
+# Determine OS version (mac/EC2) for Makefile
+os=`uname`
+case os
+when "Linux
+"
+	fname="ec2_Makefile"
+when "Darwin
+"
+	fname="mac_Makefile"
+end
+puts "Running on (#{fname}) (#{os})"
 
-#have_library('libgif', 'DGifOpen')
-#LIBARG='libgif'
-#create_makefile('composite')
+command="cp #{fname} Makefile"
+File.open("cp.log","w") {
+	|file|
+	file.write(command)
+	IO.popen(command) {
+		|p| puts p.gets
+	}
+}
 
+# Update LD_LIBRARY_PATH
 File.open("chmod.log","w") {
 	|file| file.write(`chmod u+x libraryPath.sh`)
 }
@@ -35,3 +51,4 @@ File.open("chmod.log","w") {
 File.open("libraryPath.log","w") {
 	|file| file.write(`./libraryPath.sh`)
 }
+
