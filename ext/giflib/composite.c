@@ -255,6 +255,21 @@ static VALUE compose(VALUE self, VALUE image, VALUE x, VALUE y) {
 	giflibCompose(gifCurrent, gifCompose, gifX, gifY);
 }
 
+static VALUE addFrame(VALUE self, VALUE image) {
+    struct RubyImage *current;
+    struct RubyImage *newImage;
+    GifFileType *currentGif;
+    GifFileType *imageGif;
+    
+    Data_Get_Struct(self, struct RubyImage *, current);
+    Data_Get_Struct(image, struct RubyImage *, newImage);
+    currentGif = current->gifFileType;
+    imageGif = newImage->gifFileType;
+    
+    GifMakeSavedImage(currentGif, imageGif->SavedImages);
+    return self;
+}
+
 // Executed by ruby require
 void Init_composite() {
     VALUE mGiflib = rb_define_module("Composite");
@@ -266,4 +281,5 @@ void Init_composite() {
     rb_define_method(cGiflibImage, "getImageCount", getImageCount, 0);
     rb_define_method(cGiflibImage, "encode", encode, 0);
     rb_define_method(cGiflibImage, "compose", compose, 3);
+    rb_define_method(cGiflibImage, "addFrame", addFrame, 1);
 }
