@@ -12,12 +12,29 @@
 
 #include "./giflib-5.1.1/lib/gif_lib.h"
 
+bool DEBUG_FLAG = false;
+bool PROFILE_FLAG = true;
+
 void debug(char *text, void *value) {
-    char *new_text = calloc(strlen(text) + 32, sizeof(char));
-    sprintf(new_text, "%s, %p\n", text, value);
-    ID sym_puts = rb_intern("puts");
-    rb_funcall(rb_mKernel, sym_puts, 1, rb_str_new2(new_text));
-    free(new_text);
+    char *new_text;
+    if (DEBUG_FLAG) {
+        new_text = calloc(strlen(text) + 32, sizeof(char));
+        sprintf(new_text, "%s, %p\n", text, value);
+        ID sym_puts = rb_intern("puts");
+        rb_funcall(rb_mKernel, sym_puts, 1, rb_str_new2(new_text));
+        free(new_text);
+    }
+}
+
+void profile(char *text, long time, bool alloc) {
+    char *new_text;
+    if (PROFILE_FLAG) {
+        new_text = calloc(strlen(text) + 1024, sizeof(char));
+        sprintf(new_text, "%s\t%ld\t%s\n", text, time, alloc ? "true" : "false");
+        ID sym_puts = rb_intern("puts");
+        rb_funcall(rb_mKernel, sym_puts, 1, rb_str_new2(new_text));
+        free(new_text);
+    }
 }
 
 /*
@@ -163,6 +180,9 @@ char *allocateNewIncrement(int increment) {
 int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int count) {
 	int i;
 	struct RubyString *string;
+    clock_t start_t, stop_t;
+    
+    start_t = clock();
 	string = (struct RubyString *)fileType->UserData;
 
 	if (string == NULL) {
@@ -171,12 +191,14 @@ int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int co
 
 	char *newText;
 	int increment;
-	if (string->text == NULL) {
+    bool isStringNull = string->text == NULL;
+    bool isAllocationNeeded = string->length - string->current < count;
+	if (isStringNull) {
 		increment = 1;
 		newText = allocateNewIncrement(1);
 		string->text = newText;
 		string->length = RUBY_STRING_INCREMENT_SIZE;
-	} else if (string->length - string->current < count) {
+	} else if (isAllocationNeeded) {
 		increment = string->length / RUBY_STRING_INCREMENT_SIZE;
 		newText = allocateNewIncrement(++increment);
 		memcpy(newText, string->text, string->current);
@@ -187,31 +209,46 @@ int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int co
 		string->text[string->current + i] = buffer[i];
 	}
 	string->current += count;
+    stop_t = clock();
+    profile("giflibWriteToMemory", stop_t - start_t, isAllocationNeeded);
+    
 	return count;
 }
 
 void writeToMemory(GifFileType *image, struct RubyString *string) {
 	GifFileType *gifFileType;
 	int errorCode;
+    clock_t start_t, stop_t, stop_open, stop_copy;
 
+    start_t = clock();
     gifFileType = EGifOpen(string, giflibWriteToMemory, &errorCode);
+    stop_open = clock();
     if (gifFileType == NULL) {
             rb_raise(rb_eException, "Could not open gif to encode, giflib error code %d.", errorCode);
     }
 
 	copyGifImage(gifFileType, image);
+    stop_copy = clock();
 
     if (EGifSpew(gifFileType) == GIF_ERROR) {
             rb_raise(rb_eException, "Could not spew gif to encode, giflib error code %d.", gifFileType->Error);
     }
+    stop_t = clock();
+    profile("writeToMemory:", stop_t - start_t, false);
+    profile("writeToMemory(open):", stop_open - start_t, false);
+    profile("writeToMemory(copy):", stop_copy - stop_open, false);
+    profile("writeToMemory(spew):", stop_t - stop_copy, false);
 }
 
 static VALUE encode(VALUE self) {
 	struct RubyImage *rubyImage;
 	struct RubyString *rubyString;
     int i;
+    clock_t start_t, stop_t, stop_ext, start_rubyStr;
     VALUE result;
+    start_t = clock();
     debug("Encoding...", self);
+    printf("ENCODING %p\n", self);
     
     Data_Get_Struct(self, struct RubyImage *, rubyImage);
 
@@ -221,10 +258,18 @@ static VALUE encode(VALUE self) {
             rb_raise(rb_eException, "Could not write extension block for image %d, giflib error code %d.", i, rubyImage->gifFileType->Error);
         }
     }
+    stop_ext = clock();
 	writeToMemory(rubyImage->gifFileType, rubyString);
     
+    start_rubyStr = clock();
 	result = rb_str_new(rubyString->text, rubyString->current);
     debug("Encoded", self);
+    stop_t = clock();
+    profile("encode", stop_t - start_t, false);
+    profile("encode(extension)", stop_ext - start_t, false);
+    profile("encode(memory)", start_rubyStr - stop_ext, false);
+    profile("encode(ruby string)", stop_t - start_rubyStr, false);
+    printf("ENCODED %p\n", self);
     return result;
 }
 
