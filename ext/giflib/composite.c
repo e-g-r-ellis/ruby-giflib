@@ -8,16 +8,25 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include "./giflib-5.1.1/lib/gif_lib.h"
+
+void debug(char *text, void *value) {
+    char *new_text = calloc(strlen(text) + 32, sizeof(char));
+    sprintf(new_text, "%s, %p\n", text, value);
+    ID sym_puts = rb_intern("puts");
+    rb_funcall(rb_mKernel, sym_puts, 1, rb_str_new2(new_text));
+    free(new_text);
+}
 
 /*
  Ruby binding
  */
 struct RubyString {
     char *text;
-    int length;
-    int current;
+    long length;
+    long current;
 };
 
 int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
@@ -26,7 +35,7 @@ int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
     rubyString = (struct RubyString *)fileType->UserData;    // Set by DGifOpen()
 
     // No data then stop!
-    remainingSpace = rubyString->length - rubyString->current;
+    remainingSpace = (int)(rubyString->length - rubyString->current);
     if (count > remainingSpace) {
     	count = remainingSpace;
     }
@@ -40,6 +49,7 @@ int readGifFromMemory(GifFileType *fileType, GifByteType *buffer, int count) {
 
 struct RubyImage {
     GifFileType *gifFileType;
+    struct GraphicsControlBlock *graphicsControlBlock;
 };
 
 static struct RubyString *getRubyString(VALUE rString) {
@@ -49,29 +59,41 @@ static struct RubyString *getRubyString(VALUE rString) {
     result = calloc(1, sizeof(struct RubyString));
 
     if (result != NULL) {
-	result->length = RSTRING_LEN(rString);
-	char *newText = calloc(result->length, sizeof(char));
-	if (newText == NULL) {
-		rb_raise(rb_eException, "Insufficient memory\n");
-	}
-	memcpy(newText, RSTRING_PTR(rString), result->length);
-    	//result->text = RSTRING_PTR(rString);
-	result->text = newText;
-    	result->current = 0;
+        result->length = RSTRING_LEN(rString);
+        char *newText = calloc(result->length, sizeof(char));
+        if (newText == NULL) {
+            rb_raise(rb_eException, "Insufficient memory\n");
+        }
+        memcpy(newText, RSTRING_PTR(rString), result->length);
+        result->text = newText;
+        result->current = 0;
     } else {
-	rb_raise(rb_eException, "Insufficient memory\n");
+        rb_raise(rb_eException, "Insufficient memory\n");
     }
 
     return result;
 }
 
 static void deallocate(void * rubyImage) {
-    free(rubyImage);
+    debug("Deallocating...", rubyImage);
+    // http://tenderlovemaking.com/2010/12/11/writing-ruby-c-extensions-part-2.html
+    struct RubyImage * image = (struct RubyImage *)rubyImage;
+    free(image);
+    debug("Deallocated", image);
 }
 
 static VALUE allocate(VALUE klass) {
+    VALUE result;
+    debug("Allocating...", klass);
     struct RubyImage * rubyImage = calloc(1, sizeof(struct RubyImage));
-    return Data_Wrap_Struct(klass, NULL, deallocate, rubyImage);
+    if (rubyImage == NULL) {
+        rb_raise(rb_eException, "Insufficient memory");
+    }
+    result = Data_Wrap_Struct(klass, NULL, deallocate, rubyImage);
+    debug("Allocated", klass);
+    debug("Allocated image", rubyImage);
+    debug("Allocated result", result);
+    return result;
 }
 
 static void copyGifImage(GifFileType *out, GifFileType *gifFileType) {
@@ -87,11 +109,11 @@ static void copyGifImage(GifFileType *out, GifFileType *gifFileType) {
 }
 
 static VALUE initialize(VALUE self, VALUE rubyGifString) {
-    struct RubyImage * rubyImage;
-    void *data;
+    struct RubyImage *rubyImage;
     struct RubyString *cGifString;
-    int errorCode, fd, spew, i;
-    GifFileType *out;
+    int errorCode, i;
+    struct GraphicsControlBlock *gcb;
+    debug("Initializing...", self);
    
     Check_Type(rubyGifString, T_STRING);
     
@@ -103,9 +125,18 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
         rb_raise(rb_eException, "Could not read gif, giflib error code %d.", errorCode);
     }
     if (DGifSlurp(rubyImage->gifFileType) == GIF_ERROR) {
-        rb_raise(rb_eException, "Could not decode gif, giflib error code %d", rubyImage->gifFileType->Error);
+        rb_raise(rb_eException, "Could not decode gif, giflib error code %d.", rubyImage->gifFileType->Error);
     }
-
+    if ( (gcb = calloc(rubyImage->gifFileType->ImageCount, sizeof(struct GraphicsControlBlock))) == NULL) {
+        rb_raise(rb_eException, "Insufficient memory.");
+    }
+    rubyImage->graphicsControlBlock = gcb;
+    for (i = 0; i < rubyImage->gifFileType->ImageCount; i++) {
+        if (DGifSavedExtensionToGCB(rubyImage->gifFileType, i, &(gcb[i])) == GIF_ERROR) {
+            rb_raise(rb_eException, "Could read gif extension header for image %d, giflib error code %d.", i, errorCode);
+        }
+    }
+    debug("Initialized", self);
     return self;
 }
 
@@ -163,29 +194,38 @@ void writeToMemory(GifFileType *image, struct RubyString *string) {
 	GifFileType *gifFileType;
 	int errorCode;
 
-        gifFileType = EGifOpen(string, giflibWriteToMemory, &errorCode);
-        if (gifFileType == NULL) {
-                rb_raise(rb_eException, "Could not open gif to encode, giflib error code %d.", errorCode);
-        }
+    gifFileType = EGifOpen(string, giflibWriteToMemory, &errorCode);
+    if (gifFileType == NULL) {
+            rb_raise(rb_eException, "Could not open gif to encode, giflib error code %d.", errorCode);
+    }
 
 	copyGifImage(gifFileType, image);
 
-        if (EGifSpew(gifFileType) == GIF_ERROR) {
-                rb_raise(rb_eException, "Could not spew gif to encode, giflib error code %d.", gifFileType->Error);
-        }
+    if (EGifSpew(gifFileType) == GIF_ERROR) {
+            rb_raise(rb_eException, "Could not spew gif to encode, giflib error code %d.", gifFileType->Error);
+    }
 }
 
 static VALUE encode(VALUE self) {
-	int errorCode;
 	struct RubyImage *rubyImage;
 	struct RubyString *rubyString;
-	GifFileType *gifFileType;
-        Data_Get_Struct(self, struct RubyImage *, rubyImage);
+    int i;
+    VALUE result;
+    debug("Encoding...", self);
+    
+    Data_Get_Struct(self, struct RubyImage *, rubyImage);
 
 	rubyString = newRubyString();
+    for (i = 0; i < rubyImage->gifFileType->ImageCount; i++) {
+        if (EGifGCBToSavedExtension(&(rubyImage->graphicsControlBlock[i]), rubyImage->gifFileType, i) == GIF_ERROR) {
+            rb_raise(rb_eException, "Could not write extension block for image %d, giflib error code %d.", i, rubyImage->gifFileType->Error);
+        }
+    }
 	writeToMemory(rubyImage->gifFileType, rubyString);
-
-	return rb_str_new(rubyString->text, rubyString->current);
+    
+	result = rb_str_new(rubyString->text, rubyString->current);
+    debug("Encoded", self);
+    return result;
 }
 
 static VALUE getWidth(VALUE self) {
@@ -270,6 +310,28 @@ static VALUE addFrame(VALUE self, VALUE image) {
     return self;
 }
 
+static VALUE setDelayTimeForFrame(VALUE self, VALUE frame, VALUE delay) {
+    // http://giflib.sourceforge.net/gif_lib.html#idp49255104
+    struct RubyImage *current;
+    int frameIndex, delayTime;
+    
+    Data_Get_Struct(self, struct RubyImage *, current);
+    frameIndex = FIX2INT(frame);
+    delayTime = FIX2INT(delay);
+    
+    current->graphicsControlBlock[frameIndex].DelayTime = delayTime;
+}
+
+static VALUE getDelayTimeForFrame(VALUE self, VALUE frame) {
+    struct RubyImage *current;
+    int frameIndex, delayTime;
+    
+    Data_Get_Struct(self, struct RubyImage *, current);
+    frameIndex = FIX2INT(frame);
+    delayTime = current->graphicsControlBlock[frameIndex].DelayTime;
+    return INT2FIX(delayTime);
+}
+
 // Executed by ruby require
 void Init_composite() {
     VALUE mGiflib = rb_define_module("Composite");
@@ -282,4 +344,6 @@ void Init_composite() {
     rb_define_method(cGiflibImage, "encode", encode, 0);
     rb_define_method(cGiflibImage, "compose", compose, 3);
     rb_define_method(cGiflibImage, "addFrame", addFrame, 1);
+    rb_define_method(cGiflibImage, "setDelayTimeForFrame", setDelayTimeForFrame, 2);
+    rb_define_method(cGiflibImage, "getDelayTimeForFrame", getDelayTimeForFrame, 1);
 }
