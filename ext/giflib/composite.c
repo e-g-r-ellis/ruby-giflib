@@ -12,7 +12,7 @@
 
 #include "./giflib-5.1.1/lib/gif_lib.h"
 
-bool DEBUG_FLAG = true;
+bool DEBUG_FLAG = false;
 bool PROFILE_FLAG = false;
 
 void debug(char *text, void *value) {
@@ -252,7 +252,7 @@ static VALUE encode(VALUE self) {
 
 	rubyString = newRubyString();
     for (i = 0; i < rubyImage->gifFileType->ImageCount; i++) {
-        printf("EGifGCBToSavedExtension[%d]:\t%p,\t%p\t%d\n", i, &(rubyImage->graphicsControlBlock[i]), rubyImage->graphicsControlBlock+i, rubyImage->graphicsControlBlock[i]);
+        //printf("EGifGCBToSavedExtension[%d]:\t%p,\t%p\t%d\n", i, &(rubyImage->graphicsControlBlock[i]), rubyImage->graphicsControlBlock+i, rubyImage->graphicsControlBlock[i]);
         writeGraphicsControlBlock(rubyImage, i);
     }
 	writeToMemory(rubyImage->gifFileType, rubyString);
@@ -333,6 +333,8 @@ static VALUE addFrame(VALUE self, VALUE image) {
     struct RubyImage *newImage;
     GifFileType *currentGif;
     GifFileType *imageGif;
+    GraphicsControlBlock *first;
+    GraphicsControlBlock *last;
     
     Data_Get_Struct(self, struct RubyImage, current);
     Data_Get_Struct(image, struct RubyImage, newImage);
@@ -340,7 +342,26 @@ static VALUE addFrame(VALUE self, VALUE image) {
     imageGif = newImage->gifFileType;
     
     GifMakeSavedImage(currentGif, imageGif->SavedImages);
+    current->graphicsControlBlock = realloc(current->graphicsControlBlock, sizeof(GraphicsControlBlock) * currentGif->ImageCount);
+    if (current->graphicsControlBlock == NULL) {
+        rb_raise(rb_eException, "Insufficient memory");
+    }
+    // Copy contents of first Graphics control block into last Graphics control block (so that it is not jibberish)
+    first = current->graphicsControlBlock;
+    last = current->graphicsControlBlock + currentGif->ImageCount - 1;
+    last->DisposalMode = first->DisposalMode;
+    last->UserInputFlag = first->UserInputFlag;
+    last->DelayTime = first->DelayTime;
+    last->TransparentColor = first->TransparentColor;
     return self;
+}
+
+static VALUE getNFrames(VALUE self) {
+    struct RubyImage *current;
+    GifFileType *currentGif;
+    
+    Data_Get_Struct(self, struct RubyImage, current);
+    return INT2FIX(current->gifFileType->ImageCount);
 }
 
 static VALUE setDelayTimeForFrame(VALUE self, VALUE frame, VALUE delay) {
@@ -401,6 +422,7 @@ void Init_composite() {
     rb_define_method(cGiflibImage, "encode", encode, 0);
     rb_define_method(cGiflibImage, "compose", compose, 3);
     rb_define_method(cGiflibImage, "addFrame", addFrame, 1);
+    rb_define_method(cGiflibImage, "getNFrames", getNFrames, 0);
     rb_define_method(cGiflibImage, "setDelayTimeForFrame", setDelayTimeForFrame, 2);
     rb_define_method(cGiflibImage, "getDelayTimeForFrame", getDelayTimeForFrame, 1);
     rb_define_method(cGiflibImage, "getSavedImageExtensionBlockCount", getSavedImageExtensionBlockCount, 1);
