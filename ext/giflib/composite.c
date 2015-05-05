@@ -252,7 +252,6 @@ static VALUE encode(VALUE self) {
 
 	rubyString = newRubyString();
     for (i = 0; i < rubyImage->gifFileType->ImageCount; i++) {
-        //printf("EGifGCBToSavedExtension[%d]:\t%p,\t%p\t%d\n", i, &(rubyImage->graphicsControlBlock[i]), rubyImage->graphicsControlBlock+i, rubyImage->graphicsControlBlock[i]);
         writeGraphicsControlBlock(rubyImage, i);
     }
 	writeToMemory(rubyImage->gifFileType, rubyString);
