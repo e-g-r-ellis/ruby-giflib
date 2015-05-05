@@ -22,6 +22,18 @@ class GiflibTest < Minitest::Test
 		assert(image.getImageCount == 1, "ImageCount: "+image.getImageCount.to_s+" expected 1")
 	end
 
+	def test_extensionBlocks
+		image = loadImage './test/pizza/background/background.gif'
+		assert(image.getSavedImageExtensionBlockCount(0) == 1, "Expected 1 (why?) but got "+image.getSavedImageExtensionBlockCount(0).to_s)
+	end
+
+	def test_extensionBlocksAfterSetDelay
+		image = loadImage './test/pizza/background/background.gif'
+		image.setDelayTimeForFrame(0,2)
+		assert(image.getDelayTimeForFrame(0) == 2, "Expected 2 but got "+image.getDelayTimeForFrame(0).to_s)
+		assert(image.getSavedImageExtensionBlockCount(0) == 1, "Expected 1 but got "+image.getSavedImageExtensionBlockCount(0).to_s)
+	end
+
 	def test_addFrame
 		image = loadImage './test/pizza/background/background.gif'
 		image.addFrame image

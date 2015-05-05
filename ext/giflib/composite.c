@@ -12,25 +12,14 @@
 
 #include "./giflib-5.1.1/lib/gif_lib.h"
 
-bool DEBUG_FLAG = false;
-bool PROFILE_FLAG = true;
+bool DEBUG_FLAG = true;
+bool PROFILE_FLAG = false;
 
 void debug(char *text, void *value) {
     char *new_text;
     if (DEBUG_FLAG) {
-        new_text = calloc(strlen(text) + 32, sizeof(char));
+        new_text = calloc(strlen(text) + 4096, sizeof(char));
         sprintf(new_text, "%s, %p\n", text, value);
-        ID sym_puts = rb_intern("puts");
-        rb_funcall(rb_mKernel, sym_puts, 1, rb_str_new2(new_text));
-        free(new_text);
-    }
-}
-
-void profile(char *text, long time, bool alloc) {
-    char *new_text;
-    if (PROFILE_FLAG) {
-        new_text = calloc(strlen(text) + 1024, sizeof(char));
-        sprintf(new_text, "%s\t%ld\t%s\n", text, time, alloc ? "true" : "false");
         ID sym_puts = rb_intern("puts");
         rb_funcall(rb_mKernel, sym_puts, 1, rb_str_new2(new_text));
         free(new_text);
@@ -92,37 +81,61 @@ static struct RubyString *getRubyString(VALUE rString) {
 }
 
 static void deallocate(void * rubyImage) {
-    debug("Deallocating...", rubyImage);
     // http://tenderlovemaking.com/2010/12/11/writing-ruby-c-extensions-part-2.html
     struct RubyImage * image = (struct RubyImage *)rubyImage;
     free(image);
-    debug("Deallocated", image);
 }
 
 static VALUE allocate(VALUE klass) {
     VALUE result;
-    debug("Allocating...", klass);
     struct RubyImage * rubyImage = calloc(1, sizeof(struct RubyImage));
     if (rubyImage == NULL) {
         rb_raise(rb_eException, "Insufficient memory");
     }
     result = Data_Wrap_Struct(klass, NULL, deallocate, rubyImage);
-    debug("Allocated", klass);
-    debug("Allocated image", rubyImage);
-    debug("Allocated result", result);
     return result;
 }
 
 static void copyGifImage(GifFileType *out, GifFileType *gifFileType) {
 	int i;
 	out->SWidth = gifFileType->SWidth;
-        out->SHeight = gifFileType->SHeight;
-        out->SColorResolution = gifFileType->SColorResolution;
-        out->SBackGroundColor = gifFileType->SBackGroundColor;
-        out->SColorMap = GifMakeMapObject(gifFileType->SColorMap->ColorCount, gifFileType->SColorMap->Colors);
-        for (i = 0; i < gifFileType->ImageCount; i++) {
-                GifMakeSavedImage(out, &(gifFileType)->SavedImages[i]);
-        }
+    out->SHeight = gifFileType->SHeight;
+    out->SColorResolution = gifFileType->SColorResolution;
+    out->SBackGroundColor = gifFileType->SBackGroundColor;
+    out->SColorMap = GifMakeMapObject(gifFileType->SColorMap->ColorCount, gifFileType->SColorMap->Colors);
+    for (i = 0; i < gifFileType->ImageCount; i++) {
+        GifMakeSavedImage(out, &(gifFileType)->SavedImages[i]);
+    }
+}
+
+void readGraphicsControlBlock(struct RubyImage *rImage, int index) {
+    if (DGifSavedExtensionToGCB(rImage->gifFileType, index, rImage->graphicsControlBlock+index) == GIF_ERROR ) {
+        char * text;
+        text = calloc(1024, sizeof(char));
+        sprintf(text, "No GCB for frame %d, so returning default.\n", index);
+        debug(text, 0);
+        free(text);
+    }
+}
+
+void writeGraphicsControlBlock(struct RubyImage *rImage, int index) {
+    if ( EGifGCBToSavedExtension(rImage->graphicsControlBlock+index, rImage->gifFileType, index) == GIF_ERROR ) {
+        rb_raise(rb_eException, "Could write gif extension header from %p for image %d, giflib error code %d.", rImage, index, rImage->gifFileType->Error);
+    }
+}
+
+int getDelayTimeFromGraphicsControlBlock(struct RubyImage *rImage, int index) {
+    debug("get delay image: ", rImage);
+    debug("get index: ", index);
+    debug("get result: ", rImage->graphicsControlBlock[index].DelayTime);
+    return rImage->graphicsControlBlock[index].DelayTime;
+}
+
+void setDelayTimeForGraphicsControlBlock(struct RubyImage *rImage, int index, int delay) {
+    debug("get delay image: ", rImage);
+    debug("get index: ", index);
+    debug("get result: ", delay);
+    rImage->graphicsControlBlock[index].DelayTime = delay;
 }
 
 static VALUE initialize(VALUE self, VALUE rubyGifString) {
@@ -130,11 +143,10 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     struct RubyString *cGifString;
     int errorCode, i;
     struct GraphicsControlBlock *gcb;
-    debug("Initializing...", self);
    
     Check_Type(rubyGifString, T_STRING);
     
-    Data_Get_Struct(self, struct RubyImage *, rubyImage);
+    Data_Get_Struct(self, struct RubyImage, rubyImage);
     cGifString = getRubyString(rubyGifString);
 
     // Read gif from Ruby
@@ -147,17 +159,20 @@ static VALUE initialize(VALUE self, VALUE rubyGifString) {
     if ( (gcb = calloc(rubyImage->gifFileType->ImageCount, sizeof(struct GraphicsControlBlock))) == NULL) {
         rb_raise(rb_eException, "Insufficient memory.");
     }
+    
     rubyImage->graphicsControlBlock = gcb;
     for (i = 0; i < rubyImage->gifFileType->ImageCount; i++) {
-        if (DGifSavedExtensionToGCB(rubyImage->gifFileType, i, &(gcb[i])) == GIF_ERROR) {
-            rb_raise(rb_eException, "Could read gif extension header for image %d, giflib error code %d.", i, errorCode);
-        }
+        char *text = calloc(1024, sizeof(char));
+        sprintf(text, "DGifSaved[%d]:\t%p,\t%p,\t%d\n", i, rubyImage->graphicsControlBlock, rubyImage->graphicsControlBlock+i, rubyImage->graphicsControlBlock[i]);
+        debug(text, gcb);
+        free(text);
+        
+        readGraphicsControlBlock(rubyImage, i);
     }
-    debug("Initialized", self);
     return self;
 }
 
-int RUBY_STRING_INCREMENT_SIZE = 4096;
+int RUBY_STRING_INCREMENT_SIZE = 4096 * 4096;
 
 struct RubyString *newRubyString() {
 	struct RubyString *string;
@@ -180,9 +195,7 @@ char *allocateNewIncrement(int increment) {
 int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int count) {
 	int i;
 	struct RubyString *string;
-    clock_t start_t, stop_t;
     
-    start_t = clock();
 	string = (struct RubyString *)fileType->UserData;
 
 	if (string == NULL) {
@@ -202,6 +215,7 @@ int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int co
 		increment = string->length / RUBY_STRING_INCREMENT_SIZE;
 		newText = allocateNewIncrement(++increment);
 		memcpy(newText, string->text, string->current);
+        free(string->text);
 		string->text = newText;
 		string->length = increment * RUBY_STRING_INCREMENT_SIZE;
 	}
@@ -209,8 +223,6 @@ int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int co
 		string->text[string->current + i] = buffer[i];
 	}
 	string->current += count;
-    stop_t = clock();
-    profile("giflibWriteToMemory", stop_t - start_t, isAllocationNeeded);
     
 	return count;
 }
@@ -218,76 +230,52 @@ int giflibWriteToMemory(GifFileType *fileType, const GifByteType *buffer, int co
 void writeToMemory(GifFileType *image, struct RubyString *string) {
 	GifFileType *gifFileType;
 	int errorCode;
-    clock_t start_t, stop_t, stop_open, stop_copy;
 
-    start_t = clock();
     gifFileType = EGifOpen(string, giflibWriteToMemory, &errorCode);
-    stop_open = clock();
     if (gifFileType == NULL) {
             rb_raise(rb_eException, "Could not open gif to encode, giflib error code %d.", errorCode);
     }
 
 	copyGifImage(gifFileType, image);
-    stop_copy = clock();
-
     if (EGifSpew(gifFileType) == GIF_ERROR) {
             rb_raise(rb_eException, "Could not spew gif to encode, giflib error code %d.", gifFileType->Error);
     }
-    stop_t = clock();
-    profile("writeToMemory:", stop_t - start_t, false);
-    profile("writeToMemory(open):", stop_open - start_t, false);
-    profile("writeToMemory(copy):", stop_copy - stop_open, false);
-    profile("writeToMemory(spew):", stop_t - stop_copy, false);
 }
 
 static VALUE encode(VALUE self) {
 	struct RubyImage *rubyImage;
 	struct RubyString *rubyString;
     int i;
-    clock_t start_t, stop_t, stop_ext, start_rubyStr;
     VALUE result;
-    start_t = clock();
-    debug("Encoding...", self);
-    printf("ENCODING %p\n", self);
     
-    Data_Get_Struct(self, struct RubyImage *, rubyImage);
+    Data_Get_Struct(self, struct RubyImage, rubyImage);
 
 	rubyString = newRubyString();
     for (i = 0; i < rubyImage->gifFileType->ImageCount; i++) {
-        if (EGifGCBToSavedExtension(&(rubyImage->graphicsControlBlock[i]), rubyImage->gifFileType, i) == GIF_ERROR) {
-            rb_raise(rb_eException, "Could not write extension block for image %d, giflib error code %d.", i, rubyImage->gifFileType->Error);
-        }
+        printf("EGifGCBToSavedExtension[%d]:\t%p,\t%p\t%d\n", i, &(rubyImage->graphicsControlBlock[i]), rubyImage->graphicsControlBlock+i, rubyImage->graphicsControlBlock[i]);
+        writeGraphicsControlBlock(rubyImage, i);
     }
-    stop_ext = clock();
 	writeToMemory(rubyImage->gifFileType, rubyString);
     
-    start_rubyStr = clock();
 	result = rb_str_new(rubyString->text, rubyString->current);
-    debug("Encoded", self);
-    stop_t = clock();
-    profile("encode", stop_t - start_t, false);
-    profile("encode(extension)", stop_ext - start_t, false);
-    profile("encode(memory)", start_rubyStr - stop_ext, false);
-    profile("encode(ruby string)", stop_t - start_rubyStr, false);
-    printf("ENCODED %p\n", self);
     return result;
 }
 
 static VALUE getWidth(VALUE self) {
 	struct RubyImage * rubyImage;
-	Data_Get_Struct(self, struct RubyImage *, rubyImage);
+	Data_Get_Struct(self, struct RubyImage, rubyImage);
 	return INT2FIX(rubyImage->gifFileType->SWidth);
 }
 
 static VALUE getHeight(VALUE self) {
 	struct RubyImage * rubyImage;
-	Data_Get_Struct(self, struct RubyImage *, rubyImage);
+	Data_Get_Struct(self, struct RubyImage, rubyImage);
 	return INT2FIX(rubyImage->gifFileType->SHeight);
 }
 
 static VALUE getImageCount(VALUE self) {
 	struct RubyImage * rubyImage;
-	Data_Get_Struct(self, struct RubyImage *, rubyImage);
+	Data_Get_Struct(self, struct RubyImage, rubyImage);
 	return INT2FIX(rubyImage->gifFileType->ImageCount);
 }
 
@@ -320,8 +308,8 @@ static VALUE compose(VALUE self, VALUE image, VALUE x, VALUE y) {
 	Check_Type(x, T_FIXNUM);
 	Check_Type(y, T_FIXNUM);
 
-	Data_Get_Struct(self, struct RubyImage *, current);
-	Data_Get_Struct(image, struct RubyImage *, compose);
+	Data_Get_Struct(self, struct RubyImage, current);
+	Data_Get_Struct(image, struct RubyImage, compose);
 	gifCurrent = current->gifFileType;
 	gifCompose = compose->gifFileType;
 	gifX = FIX2INT(x);
@@ -346,8 +334,8 @@ static VALUE addFrame(VALUE self, VALUE image) {
     GifFileType *currentGif;
     GifFileType *imageGif;
     
-    Data_Get_Struct(self, struct RubyImage *, current);
-    Data_Get_Struct(image, struct RubyImage *, newImage);
+    Data_Get_Struct(self, struct RubyImage, current);
+    Data_Get_Struct(image, struct RubyImage, newImage);
     currentGif = current->gifFileType;
     imageGif = newImage->gifFileType;
     
@@ -360,21 +348,45 @@ static VALUE setDelayTimeForFrame(VALUE self, VALUE frame, VALUE delay) {
     struct RubyImage *current;
     int frameIndex, delayTime;
     
-    Data_Get_Struct(self, struct RubyImage *, current);
+    Data_Get_Struct(self, struct RubyImage, current);
     frameIndex = FIX2INT(frame);
     delayTime = FIX2INT(delay);
     
-    current->graphicsControlBlock[frameIndex].DelayTime = delayTime;
+    setDelayTimeForGraphicsControlBlock(current, frameIndex, delayTime);
 }
 
 static VALUE getDelayTimeForFrame(VALUE self, VALUE frame) {
     struct RubyImage *current;
     int frameIndex, delayTime;
     
-    Data_Get_Struct(self, struct RubyImage *, current);
+    Data_Get_Struct(self, struct RubyImage, current);
     frameIndex = FIX2INT(frame);
-    delayTime = current->graphicsControlBlock[frameIndex].DelayTime;
+    delayTime = getDelayTimeFromGraphicsControlBlock(current, frameIndex);
+    
     return INT2FIX(delayTime);
+}
+
+static VALUE getSavedImageExtensionBlockCount(VALUE self, VALUE index) {
+    struct RubyImage *current;
+    int intIndex;
+    
+    Data_Get_Struct(self, struct RubyImage, current);
+    intIndex = FIX2INT(index);
+    return INT2FIX(current->gifFileType->SavedImages[intIndex].ExtensionBlockCount);
+}
+
+static VALUE listGCBs(VALUE self) {
+    struct RubyImage *current;
+    int i;
+    
+    Data_Get_Struct(self, struct RubyImage, current);
+    for (i = 0; i < current->gifFileType->ImageCount; i++) {
+        char *text;
+        text = calloc(1024, sizeof(char));
+        sprintf(text, "Graphics control block[%d] = %p delay %d ", i, current->graphicsControlBlock+i, current->graphicsControlBlock[i].DelayTime);
+        debug(text, 0);
+        free(text);
+    }
 }
 
 // Executed by ruby require
@@ -391,4 +403,6 @@ void Init_composite() {
     rb_define_method(cGiflibImage, "addFrame", addFrame, 1);
     rb_define_method(cGiflibImage, "setDelayTimeForFrame", setDelayTimeForFrame, 2);
     rb_define_method(cGiflibImage, "getDelayTimeForFrame", getDelayTimeForFrame, 1);
+    rb_define_method(cGiflibImage, "getSavedImageExtensionBlockCount", getSavedImageExtensionBlockCount, 1);
+    rb_define_method(cGiflibImage, "listGCBs", listGCBs, 0);
 }
