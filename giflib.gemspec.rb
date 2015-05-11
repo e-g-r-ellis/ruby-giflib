@@ -1,6 +1,6 @@
 Gem::Specification.new do |spec|
 	spec.name = 'giflib'
-	spec.version = '0.2'
+	spec.version = '0.4'
 	spec.summary = 'Summary'
 	spec.description = 'Description'
 	spec.email = 'ignore this'

@@ -13,11 +13,15 @@ File.open("configure.log", "w") {
 	|file| file.write(`./configure`)
 }
 
+File.open("make_clean.log", "w") {
+	|file| file.write(`make clean`);
+}
+
 File.open("make.log", "w") {
 	|file| file.write(`make`)
 }
 
-File.open("make_install.log", "w") {
+File.open("sudo_make_install.log", "w") {
 	|file| file.write(`sudo make install`)
 }
 
@@ -53,3 +57,4 @@ File.open("libraryPath.log","w") {
 	|file| file.write(`./libraryPath.sh`)
 }
 
+`LD_LIBRARY_PATH=/usr/local/lib/:$LD_LIBRARY_PATH; export LD_LIBRARY_PATH`
