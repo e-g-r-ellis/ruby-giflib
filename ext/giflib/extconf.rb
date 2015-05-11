@@ -1,6 +1,7 @@
 require 'mkmf'
 
 # Extract giflib
+
 File.open("tar.log", "w") {
 	|file| file.write(`tar -xvf giflib-5.1.1.tar.bz2`)
 }

@@ -339,8 +339,9 @@ static VALUE addFrame(VALUE self, VALUE image) {
     Data_Get_Struct(image, struct RubyImage, newImage);
     currentGif = current->gifFileType;
     imageGif = newImage->gifFileType;
-    
+
     GifMakeSavedImage(currentGif, imageGif->SavedImages);
+
     current->graphicsControlBlock = realloc(current->graphicsControlBlock, sizeof(GraphicsControlBlock) * currentGif->ImageCount);
     if (current->graphicsControlBlock == NULL) {
         rb_raise(rb_eException, "Insufficient memory");
