@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
-#include "./giflib-5.1.1/lib/gif_lib.h"
+#include <gif_lib.h>
 
 /*
  Ruby binding
